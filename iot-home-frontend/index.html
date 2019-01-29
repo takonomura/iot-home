@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IoT Home</title>
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/css/bootstrap.min.css" integrity="sha384-GJzZqFGwb1QTTN6wy59ffF1BuGJpLSa9DkKMp0DgiMDm4iYMj70gZWKYbI706tWS" crossorigin="anonymous">
+  <style>
+    .chart-container {
+      position: relative;
+      height: 300px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+      <ul class="nav flex-row-reverse">
+        <li class="nav-item"><a class="nav-link" href="/">30m</a></li>
+        <li class="nav-item"><a class="nav-link" href="/?range=1h&interval=30s">1h</a></li>
+        <li class="nav-item"><a class="nav-link" href="/?range=3h&interval=1m">3h</a></li>
+        <li class="nav-item"><a class="nav-link" href="/?range=12h&interval=5m">12h</a></li>
+        <li class="nav-item"><a class="nav-link" href="/?range=1d&interval=10m">1d</a></li>
+      </ul>
+      <div class="row m-3">
+        <div class="col-sm text-center">
+          <h3>Temperature</h3>
+          <dl id="temperature-current"></dl>
+        </div>
+        <div class="col-sm text-center">
+          <h3>Humidity</h3>
+          <dl id="humidity-current"></dl>
+        </div>
+        <div class="col-sm text-center">
+          <h3>Pressure</h3>
+          <dl id="pressure-current"></dl>
+        </div>
+      </div>
+      <div class="chart-container">
+        <canvas id="temperature-chart"></canvas>
+        <canvas id="humidity-chart"></canvas>
+        <canvas id="pressure-chart"></canvas>
+      </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.3/Chart.bundle.min.js"></script>
+  <script>
+    function setCurrent(elementId, data, display) {
+      const baseElement = document.getElementById(elementId);
+      data.forEach(room => {
+        const roomName = room.label;
+        const current = room.data[room.data.length - 1].y;
+        const currentText = display(current);
+
+        const titleElement = document.createElement('dt');
+        titleElement.classList.add('text-muted');
+        titleElement.textContent = roomName;
+        baseElement.appendChild(titleElement);
+
+        const dataElement = document.createElement('dd');
+        dataElement.textContent = currentText;
+        baseElement.appendChild(dataElement);
+      })
+    }
+
+    function buildChartOptions(chartName, min, max) {
+      const options = {
+        maintainAspectRatio: false,
+        title: {
+          display: true,
+          text: chartName,
+        },
+        scales: {
+          xAxes: [{
+            type: 'time',
+            scaleLabel: {
+              display: true,
+              labelString: 'Date'
+            },
+          }],
+        },
+      };
+      if (min != null && max != null) {
+        options.scales.yAxes = [{
+          ticks: {
+            suggestedMin: min,
+            suggestedMax: max,
+          },
+        }];
+      }
+      return options
+    }
+
+    function createChart(elementId, name, min, max, datasets) {
+      const element = document.getElementById(elementId);
+      const options = buildChartOptions(name, min, max);
+      new Chart(element, { type: 'line', data: { datasets }, options });
+    }
+
+    fetch('/data.json' + document.location.search)
+      .then(resp => resp.json())
+      .then(data => {
+        data.temperature.forEach(room => room.data.forEach(p => p.y = p.y.toFixed(2)));
+        data.humidity.forEach(room => room.data.forEach(p => p.y = p.y.toFixed(2)));
+        data.pressure.forEach(room => room.data.forEach(p => p.y = p.y/100));
+        data.pressure.forEach(room => room.data.forEach(p => p.y = p.y.toFixed(2)));
+
+        setCurrent('temperature-current', data.temperature, v => `${v} ℃`);
+        setCurrent('humidity-current', data.humidity, v => `${v} %`);
+        setCurrent('pressure-current', data.pressure, v => `${v} hPa`);
+        createChart('temperature-chart', 'Temperature', 10, 25, data.temperature);
+        createChart('humidity-chart', 'Humidity', 55, 70, data.humidity);
+        createChart('pressure-chart', 'Pressure', null, null, data.pressure);
+      })
+  </script>
+</body>
+</html>
