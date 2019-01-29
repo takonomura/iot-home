@@ -5,6 +5,9 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+
+	"github.com/gorilla/pat"
+	"github.com/markbates/goth/gothic"
 )
 
 var timeRangePattern = regexp.MustCompile(`^[0-9]{1,2}[smhd]$`)
@@ -40,11 +43,37 @@ type Server struct {
 
 	AssetsDir string
 	IndexFile string
+
+	AllowedEmails []string
+}
+
+func (s *Server) authCallback(w http.ResponseWriter, r *http.Request) {
+	user, err := gothic.CompleteUserAuth(w, r)
+	if err != nil {
+		log.Printf("completing user auth: %s", err)
+		writeError(w, http.StatusInternalServerError, "Authentication failed")
+		return
+	}
+	gothic.StoreInSession("email", user.Email, r, w)
+	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+}
+
+func (s *Server) isAllowed(r *http.Request) bool {
+	v, err := gothic.GetFromSession("email", r)
+	if err != nil {
+		return false
+	}
+	for _, s := range s.AllowedEmails {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) getData(rw http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		writeError(rw, http.StatusMethodNotAllowed, "Method Not Allowed")
+	if !s.isAllowed(r) {
+		writeError(rw, http.StatusForbidden, "forbidden")
 		return
 	}
 
@@ -79,20 +108,23 @@ func (s *Server) getIndex(rw http.ResponseWriter, r *http.Request) {
 		http.NotFound(rw, r)
 		return
 	}
-	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		http.Error(rw, "405 Method Not Allowed", http.StatusMethodNotAllowed)
+	if !s.isAllowed(r) {
+		http.Redirect(rw, r, "/auth/google", http.StatusTemporaryRedirect)
 		return
 	}
-
 	http.ServeFile(rw, r, s.IndexFile)
 }
 
-func (s *Server) Mux() *http.ServeMux {
-	mux := http.NewServeMux()
+func (s *Server) Mux() *pat.Router {
+	p := pat.New()
 
-	mux.HandleFunc("/", s.getIndex)
-	mux.HandleFunc("/data.json", s.getData)
-	mux.Handle("/assets/", http.StripPrefix("/assets", http.FileServer(http.Dir(s.AssetsDir))))
+	p.PathPrefix("/assets").Handler(http.StripPrefix("/assets", http.FileServer(http.Dir(s.AssetsDir))))
 
-	return mux
+	p.Get("/auth/{provider}/callback", s.authCallback)
+	p.Get("/auth/{provider}", gothic.BeginAuthHandler)
+
+	p.Get("/data.json", s.getData)
+	p.Get("/", s.getIndex)
+
+	return p
 }
