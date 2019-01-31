@@ -1,0 +1,27 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['pull', 'gcr.io/$PROJECT_ID/iot-home-state-subscriber:latest']
+  id: 'pull-latest'
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['pull', 'gcr.io/$PROJECT_ID/iot-home-state-subscriber-buildcache:builder']
+  id: 'pull-builder-stage'
+  waitFor: ['-']
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+  - 'build'
+  - '--cache-from=gcr.io/$PROJECT_ID/iot-home-state-subscriber:latest'
+  - '--cache-from=gcr.io/$PROJECT_ID/iot-home-state-subscriber-buildcache:builder'
+  - '--tag=gcr.io/$PROJECT_ID/iot-home-state-subscriber:latest'
+  - '--tag=gcr.io/$PROJECT_ID/iot-home-state-subscriber:$COMMIT_SHA'
+  - 'iot-home-state-subscriber'
+  waitFor: ['pull-latest', 'pull-builder-stage']
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+  - 'build'
+  - '--target=builder'
+  - '--tag=gcr.io/$PROJECT_ID/iot-home-state-subscriber-buildcache:builder'
+  - 'iot-home-state-subscriber'
+images:
+- 'gcr.io/$PROJECT_ID/iot-home-state-subscriber:latest'
+- 'gcr.io/$PROJECT_ID/iot-home-state-subscriber:$COMMIT_SHA'
+- 'gcr.io/$PROJECT_ID/iot-home-state-subscriber-buildcache:builder'
