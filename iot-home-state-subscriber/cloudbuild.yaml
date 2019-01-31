@@ -1,9 +1,11 @@
 steps:
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['pull', 'gcr.io/$PROJECT_ID/iot-home-state-subscriber:latest']
+  entrypoint: '/bin/sh'
+  args: ['-c', 'docker pull gcr.io/$PROJECT_ID/iot-home-state-subscriber:latest || true']
   id: 'pull-latest'
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['pull', 'gcr.io/$PROJECT_ID/iot-home-state-subscriber-buildcache:builder']
+  entrypoint: '/bin/sh'
+  args: ['-c', 'docker pull gcr.io/$PROJECT_ID/iot-home-state-subscriber-buildcache:builder || true']
   id: 'pull-builder-stage'
   waitFor: ['-']
 - name: 'gcr.io/cloud-builders/docker'
